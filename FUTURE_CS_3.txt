@@ -1,0 +1,179 @@
+# ==========================================
+# PHISHING EMAIL DETECTION & AWARENESS SYSTEM
+# Future Interns - Cyber Security Task 2
+# ==========================================
+
+import re
+from urllib.parse import urlparse
+
+class PhishingDetector:
+
+    def __init__(self):
+        self.phishing_keywords = [
+            "urgent",
+            "verify account",
+            "update account",
+            "bank",
+            "suspended",
+            "click here",
+            "login now",
+            "limited time",
+            "winner",
+            "claim prize",
+            "free money",
+            "security alert",
+            "confirm identity",
+            "reset password"
+        ]
+
+    def check_sender(self, sender):
+        score = 0
+
+        suspicious_domains = [
+            "fakebank.com",
+            "secure-login.net",
+            "verify-account.org"
+        ]
+
+        for domain in suspicious_domains:
+            if domain in sender.lower():
+                score += 3
+
+        return score
+
+    def extract_urls(self, text):
+        url_pattern = r'https?://[^\s]+'
+        return re.findall(url_pattern, text)
+
+    def check_urls(self, text):
+        score = 0
+        urls = self.extract_urls(text)
+
+        for url in urls:
+            parsed = urlparse(url)
+
+            if len(parsed.netloc) > 30:
+                score += 2
+
+            if "@" in url:
+                score += 3
+
+            if parsed.netloc.count("-") >= 2:
+                score += 2
+
+            if parsed.netloc.replace(".", "").isdigit():
+                score += 3
+
+        return score
+
+    def check_keywords(self, text):
+        score = 0
+        text = text.lower()
+
+        for keyword in self.phishing_keywords:
+            if keyword in text:
+                score += 1
+
+        return score
+
+    def check_caps(self, text):
+        words = text.split()
+
+        if len(words) == 0:
+            return 0
+
+        caps_words = 0
+
+        for word in words:
+            if len(word) > 3 and word.isupper():
+                caps_words += 1
+
+        if caps_words >= 5:
+            return 2
+
+        return 0
+
+    def analyze_email(self, sender, subject, body):
+
+        total_score = 0
+
+        total_score += self.check_sender(sender)
+        total_score += self.check_urls(body)
+        total_score += self.check_keywords(subject)
+        total_score += self.check_keywords(body)
+        total_score += self.check_caps(body)
+
+        if total_score >= 8:
+            verdict = "PHISHING"
+        elif total_score >= 4:
+            verdict = "SUSPICIOUS"
+        else:
+            verdict = "SAFE"
+
+        return {
+            "score": total_score,
+            "verdict": verdict
+        }
+
+
+def display_report(sender, subject, result):
+
+    print("\n" + "=" * 50)
+    print("PHISHING EMAIL ANALYSIS REPORT")
+    print("=" * 50)
+
+    print(f"Sender  : {sender}")
+    print(f"Subject : {subject}")
+    print(f"Score   : {result['score']}")
+    print(f"Result  : {result['verdict']}")
+
+    print("=" * 50)
+
+    if result["verdict"] == "PHISHING":
+        print("Advice:")
+        print("- Do NOT click links")
+        print("- Do NOT download attachments")
+        print("- Report the email")
+        print("- Delete immediately")
+
+    elif result["verdict"] == "SUSPICIOUS":
+        print("Advice:")
+        print("- Verify sender identity")
+        print("- Check links carefully")
+        print("- Contact organization directly")
+
+    else:
+        print("Advice:")
+        print("- No major phishing indicators found")
+
+    print("=" * 50)
+
+
+def main():
+
+    detector = PhishingDetector()
+
+    print("PHISHING EMAIL DETECTION SYSTEM")
+    print("-" * 40)
+
+    sender = input("Enter Sender Email: ")
+    subject = input("Enter Subject: ")
+
+    print("\nEnter Email Body:")
+    body = input()
+
+    result = detector.analyze_email(
+        sender,
+        subject,
+        body
+    )
+
+    display_report(
+        sender,
+        subject,
+        result
+    )
+
+
+if __name__ == "__main__":
+    main()
