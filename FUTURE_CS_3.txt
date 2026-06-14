@@ -1,178 +1,201 @@
-# ==========================================
-# PHISHING EMAIL DETECTION & AWARENESS SYSTEM
-# Future Interns - Cyber Security Task 2
-# ==========================================
+ API Security Risk Analysis
 
-import re
-from urllib.parse import urlparse
+import requests
+import json
+from datetime import datetime
 
-class PhishingDetector:
+class APISecurityAnalyzer:
 
-    def __init__(self):
-        self.phishing_keywords = [
-            "urgent",
-            "verify account",
-            "update account",
-            "bank",
-            "suspended",
-            "click here",
-            "login now",
-            "limited time",
-            "winner",
-            "claim prize",
-            "free money",
-            "security alert",
-            "confirm identity",
-            "reset password"
-        ]
+    def __init__(self, url):
+        self.url = url
+        self.report = []
 
-    def check_sender(self, sender):
-        score = 0
+    def add_result(self, title, status, details):
+        self.report.append({
+            "title": title,
+            "status": status,
+            "details": details
+        })
 
-        suspicious_domains = [
-            "fakebank.com",
-            "secure-login.net",
-            "verify-account.org"
-        ]
-
-        for domain in suspicious_domains:
-            if domain in sender.lower():
-                score += 3
-
-        return score
-
-    def extract_urls(self, text):
-        url_pattern = r'https?://[^\s]+'
-        return re.findall(url_pattern, text)
-
-    def check_urls(self, text):
-        score = 0
-        urls = self.extract_urls(text)
-
-        for url in urls:
-            parsed = urlparse(url)
-
-            if len(parsed.netloc) > 30:
-                score += 2
-
-            if "@" in url:
-                score += 3
-
-            if parsed.netloc.count("-") >= 2:
-                score += 2
-
-            if parsed.netloc.replace(".", "").isdigit():
-                score += 3
-
-        return score
-
-    def check_keywords(self, text):
-        score = 0
-        text = text.lower()
-
-        for keyword in self.phishing_keywords:
-            if keyword in text:
-                score += 1
-
-        return score
-
-    def check_caps(self, text):
-        words = text.split()
-
-        if len(words) == 0:
-            return 0
-
-        caps_words = 0
-
-        for word in words:
-            if len(word) > 3 and word.isupper():
-                caps_words += 1
-
-        if caps_words >= 5:
-            return 2
-
-        return 0
-
-    def analyze_email(self, sender, subject, body):
-
-        total_score = 0
-
-        total_score += self.check_sender(sender)
-        total_score += self.check_urls(body)
-        total_score += self.check_keywords(subject)
-        total_score += self.check_keywords(body)
-        total_score += self.check_caps(body)
-
-        if total_score >= 8:
-            verdict = "PHISHING"
-        elif total_score >= 4:
-            verdict = "SUSPICIOUS"
+    def check_https(self):
+        if self.url.startswith("https://"):
+            self.add_result(
+                "HTTPS Security",
+                "PASS",
+                "Secure HTTPS connection detected."
+            )
         else:
-            verdict = "SAFE"
+            self.add_result(
+                "HTTPS Security",
+                "FAIL",
+                "API does not use HTTPS."
+            )
 
-        return {
-            "score": total_score,
-            "verdict": verdict
-        }
+    def check_response_headers(self):
+        try:
+            response = requests.get(self.url, timeout=10)
 
+            headers = response.headers
 
-def display_report(sender, subject, result):
+            security_headers = [
+                "Content-Security-Policy",
+                "X-Frame-Options",
+                "X-Content-Type-Options",
+                "Strict-Transport-Security"
+            ]
 
-    print("\n" + "=" * 50)
-    print("PHISHING EMAIL ANALYSIS REPORT")
-    print("=" * 50)
+            for header in security_headers:
+                if header in headers:
+                    self.add_result(
+                        header,
+                        "PASS",
+                        f"{header} found."
+                    )
+                else:
+                    self.add_result(
+                        header,
+                        "WARNING",
+                        f"{header} missing."
+                    )
 
-    print(f"Sender  : {sender}")
-    print(f"Subject : {subject}")
-    print(f"Score   : {result['score']}")
-    print(f"Result  : {result['verdict']}")
+        except Exception as e:
+            self.add_result(
+                "Header Analysis",
+                "ERROR",
+                str(e)
+            )
 
-    print("=" * 50)
+    def check_authentication(self):
+        try:
+            response = requests.get(self.url, timeout=10)
 
-    if result["verdict"] == "PHISHING":
-        print("Advice:")
-        print("- Do NOT click links")
-        print("- Do NOT download attachments")
-        print("- Report the email")
-        print("- Delete immediately")
+            if response.status_code == 401:
+                self.add_result(
+                    "Authentication",
+                    "PASS",
+                    "Authentication required."
+                )
+            else:
+                self.add_result(
+                    "Authentication",
+                    "WARNING",
+                    "No authentication required."
+                )
 
-    elif result["verdict"] == "SUSPICIOUS":
-        print("Advice:")
-        print("- Verify sender identity")
-        print("- Check links carefully")
-        print("- Contact organization directly")
+        except Exception as e:
+            self.add_result(
+                "Authentication",
+                "ERROR",
+                str(e)
+            )
 
-    else:
-        print("Advice:")
-        print("- No major phishing indicators found")
+    def check_information_disclosure(self):
+        try:
+            response = requests.get(self.url, timeout=10)
 
-    print("=" * 50)
+            content = response.text.lower()
+
+            keywords = [
+                "password",
+                "secret",
+                "token",
+                "apikey",
+                "database"
+            ]
+
+            found = []
+
+            for word in keywords:
+                if word in content:
+                    found.append(word)
+
+            if found:
+                self.add_result(
+                    "Information Disclosure",
+                    "WARNING",
+                    f"Sensitive words found: {', '.join(found)}"
+                )
+            else:
+                self.add_result(
+                    "Information Disclosure",
+                    "PASS",
+                    "No obvious sensitive information exposed."
+                )
+
+        except Exception as e:
+            self.add_result(
+                "Information Disclosure",
+                "ERROR",
+                str(e)
+            )
+
+    def check_status_code(self):
+        try:
+            response = requests.get(self.url, timeout=10)
+
+            self.add_result(
+                "HTTP Status",
+                "INFO",
+                f"Returned Status Code: {response.status_code}"
+            )
+
+        except Exception as e:
+            self.add_result(
+                "HTTP Status",
+                "ERROR",
+                str(e)
+            )
+
+    def generate_report(self):
+        filename = "api_security_report.txt"
+
+        with open(filename, "w", encoding="utf-8") as file:
+
+            file.write("=" * 60 + "\n")
+            file.write("API SECURITY RISK ANALYSIS REPORT\n")
+            file.write("=" * 60 + "\n\n")
+
+            file.write(f"Target API: {self.url}\n")
+            file.write(f"Generated: {datetime.now()}\n\n")
+
+            for item in self.report:
+                file.write(f"Check: {item['title']}\n")
+                file.write(f"Status: {item['status']}\n")
+                file.write(f"Details: {item['details']}\n")
+                file.write("-" * 50 + "\n")
+
+        print(f"\nReport saved as: {filename}")
+
+    def run(self):
+        print("\nStarting API Security Analysis...\n")
+
+        self.check_https()
+        self.check_response_headers()
+        self.check_authentication()
+        self.check_information_disclosure()
+        self.check_status_code()
+
+        print("\nRESULTS")
+        print("=" * 50)
+
+        for item in self.report:
+            print(f"\n{item['title']}")
+            print(f"Status : {item['status']}")
+            print(f"Details: {item['details']}")
+
+        self.generate_report()
 
 
 def main():
 
-    detector = PhishingDetector()
+    print("=" * 60)
+    print("API SECURITY RISK ANALYZER")
+    print("=" * 60)
 
-    print("PHISHING EMAIL DETECTION SYSTEM")
-    print("-" * 40)
+    api_url = input("\nEnter API URL: ").strip()
 
-    sender = input("Enter Sender Email: ")
-    subject = input("Enter Subject: ")
-
-    print("\nEnter Email Body:")
-    body = input()
-
-    result = detector.analyze_email(
-        sender,
-        subject,
-        body
-    )
-
-    display_report(
-        sender,
-        subject,
-        result
-    )
+    analyzer = APISecurityAnalyzer(api_url)
+    analyzer.run()
 
 
 if __name__ == "__main__":
